@@ -1,0 +1,49 @@
+# ---- 敏感配置（含 token / 树莓派 SSH 密码，绝不入库）----
+pc_bridge/bridge_config.json
+pi_client/pet_config.json
+
+# ---- 日志 ----
+pc_bridge/bridge.log
+
+# ---- 第三方无许可素材（codex-pet-DeepSeek-girl，仅个人使用）----
+design/whale_raw/
+design/whale_assets/
+pi_client/assets/whale/
+
+# ---- 生成物 / 缓存 ----
+preview_out/
+out_png/
+__pycache__/
+*.pyc
+dsh_session_dump.jsonl
+dshtrigger.txt
+
+# ---- 一次性调试/运维脚本（不随项目分发）----
+deploy_v3.py
+deploy_v4.py
+deploy_v5.py
+redeploy_pi.py
+fix_pi_screen.py
+who_holds_gpio.py
+diag_gpio_pi.py
+check_font_pi.py
+run_color_test.py
+apply_bgr_fix.py
+apply_final.py
+setup_pi_zstd.py
+dsh_session_tool.py
+verify_pi.py
+analyze_bmp.py
+_deploy_screen_test.py
+_color_test.py
+
+# ---- 调试残留 ----
+dbg.py
+dbg2.py
+dbg3.py
+dbg4.py
+integ.py
+verify_art.py
+test_gpio_pi.py
+pc_bridge/check_fflate.js
+pc_bridge/zstd_helper.js

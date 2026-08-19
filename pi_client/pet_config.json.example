@@ -1,0 +1,8 @@
+{
+  "bridge_url": "http://192.168.3.8:8123",
+  "token": "YOUR_RANDOM_TOKEN_HERE",
+  "pet_name": "DeepSeek girl",
+  "sprite_source": "auto",
+  "backlight_pin": null,
+  "approve_enabled": true
+}

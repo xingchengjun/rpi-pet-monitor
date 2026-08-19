@@ -1,0 +1,23 @@
+{
+  "bind_host": "0.0.0.0",
+  "port": 8123,
+  "token": "YOUR_RANDOM_TOKEN_HERE",
+  "codex": {
+    "window_title": "codex",
+    "mode": "foreground",
+    "activate_delay_s": 0.35
+  },
+  "activity": {
+    "active_window_s": 30,
+    "recent_window_s": 600,
+    "pending_window_s": 3600
+  },
+  "dsh_sessions_dir": null,
+  "codex_sessions_dir": null,
+  "pi_ssh": {
+    "host": "192.168.3.16",
+    "user": "pi",
+    "password": "YOUR_PI_PASSWORD"
+  },
+  "debug_tail": false
+}

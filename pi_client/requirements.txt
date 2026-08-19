@@ -1,0 +1,6 @@
+# 树莓派端依赖（Python 3.9+；Debian 13 用 apt 装：python3-pil python3-spidev python3-gpiozero python3-lgpio）
+# 安装：pip3 install -r requirements.txt
+# 说明：显示走自研 st7735_driver.py（spidev + python3-gpiod），不依赖 luma.lcd / RPi.GPIO
+spidev>=3.5
+gpiozero>=1.6.2
+Pillow>=9.0.0

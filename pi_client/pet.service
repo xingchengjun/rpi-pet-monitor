@@ -1,0 +1,22 @@
+# pet.service — 树莓派开机自启（systemd）
+# 安装：
+#   sudo cp pet.service /etc/systemd/system/pet.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now pet
+# 查看日志：journalctl -u pet -f
+[Unit]
+Description=Pi Pet Status Screen (ST7735 128x160)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/pet
+ExecStart=/usr/bin/python3 /home/pi/pet/pet.py
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

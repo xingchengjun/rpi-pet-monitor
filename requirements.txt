@@ -1,0 +1,5 @@
+# 桌宠运行时依赖
+#   电脑预览 / 导出 PNG（Windows / Mac）：只需安装 Pillow
+#   树莓派真机：安装 luma.lcd 后会自动带上 spidev
+Pillow>=10.0
+luma.lcd>=2.12
