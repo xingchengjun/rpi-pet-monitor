@@ -1,52 +1,43 @@
 /*
- * esp32_pet.ino — ESP32-C3 mini + ST7789 240x240 WiFi 桌宠状态屏
+ * esp32_pet.ino — ESP32 + ST7789 240x240 WiFi 桌宠状态屏（TFT_eSPI 版）
  *
  * 功能：轮询电脑端桥（bridge.py）获取 DSH/Codex 状态与待审批数，
- *       显示状态色背景 + 鲸鱼娘动画 + 设备状态田字仪表；按键远程批准。
+ *       状态色背景 + 鲸鱼娘动画 + 设备状态田字仪表；单按钮远程批准。
  *
  * 依赖库（Arduino 库管理器安装）：
- *   - Adafruit GFX Library
- *   - Adafruit ST7789 Library
+ *   - TFT_eSPI（作者 Bodmer）—— 引脚/分辨率在库的 User_Setup.h 里配置！
  *   - ArduinoJson (v6)
  *
- * 接线（按用户实接）：
- *   SCK  -> GPIO5     SDA(MOSI) -> GPIO1
- *   RES  -> GPIO2     DC -> GPIO3
- *   BLK  -> GPIO10    CS -> GND（板上唯一 SPI 设备）
- * 模式切换按钮（可改 BTN_MODE）：
- *   MODE -> GPIO4（接 GND；短按切屏，长按批准/刷新）
+ * User_Setup.h 关键配置（已在你机器上配好，可亮的那套）：
+ *   #define ST7789_DRIVER
+ *   #define TFT_WIDTH 240 / TFT_HEIGHT 240
+ *   #define TFT_MOSI 23 / TFT_SCLK 18 / TFT_DC 2 / TFT_RST 4 / TFT_CS -1
+ *   #define TFT_RGB_ORDER TFT_RGB（或 TFT_BGR，按实际颜色调）
+ * 接线：SCK→GPIO18  SDA→GPIO23  RES→GPIO4  DC→GPIO2  BLK→3V3（背光常亮）
+ *       或 BLK 接 GPIO 并在 User_Setup.h 加 #define TFT_BL <引脚>（可按键关背光）
+ * 模式按钮：GPIO0（接 GND；短按切屏，长按批准/刷新）—— 可改 BTN_MODE
  */
-
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_ST7789.h>
+#include <TFT_eSPI.h>
 #include "fonts_cn.h"
 #include "whale_frames.h"
 
 // ================= 配置（改这里） =================
-const char* WIFI_SSID = "202";
-const char* WIFI_PASS = "13865520711";
+const char* WIFI_SSID = "YOUR_WIFI_SSID";
+const char* WIFI_PASS = "YOUR_WIFI_PASS";
 const char* BRIDGE_HOST = "192.168.3.8";   // 电脑 IP
 const int   BRIDGE_PORT = 8123;
-const char* BRIDGE_TOKEN = "c440337ac660451abb9cb9f95f27e909";   // 与 bridge_config.json 一致
+const char* BRIDGE_TOKEN = "YOUR_TOKEN";   // 与 bridge_config.json 一致
 #define POLL_MS 2000                        // 轮询间隔
 #define ANIM_MS 125                         // 动画帧间隔 (8fps)
 
-// 屏幕引脚
-#define TFT_SCK 5
-#define TFT_MOSI 1
-#define TFT_DC  3
-#define TFT_RST 2
-#define TFT_BLK 10
-
 // 模式切换按钮（接 GND，内部上拉）
-// 短按 = 切换 桌宠屏 ⇄ 设备屏；长按(>1s) = 有待审批时批准，否则立即刷新
-#define BTN_MODE 4
+#define BTN_MODE 0
 
 // ================= 全局 =================
-Adafruit_ST7789 tft = Adafruit_ST7789(&SPI, -1 /*CS=GND*/, TFT_DC, TFT_RST);
+TFT_eSPI tft = TFT_eSPI();
 
 // PANTONE 状态色
 #define C_IDLE  tft.color565(0, 32, 91)       // 281C 蓝（空闲）
@@ -57,14 +48,13 @@ Adafruit_ST7789 tft = Adafruit_ST7789(&SPI, -1 /*CS=GND*/, TFT_DC, TFT_RST);
 
 DynamicJsonDocument doc(2048);
 int screen = 0;          // 0=桌宠 1=设备状态
-bool backlight = true;
 unsigned long lastPoll = 0, lastAnim = 0;
 int state = 3;           // 0 idle 1 work 2 alert 3 offline
 int pending = 0, cpu = 0, mem = 0, gpu = 0, disk = 0;
 char agent[24] = "离线";
 char clockStr[8] = "--:--";
 
-// ================= 文本绘制（12x16 位图字体，startWrite 批量） =================
+// ================= 文本绘制（12x16 位图字体） =================
 const glyph_t* findGlyph(const char* utf8) {
     for (int i = 0; i < GLYPH_COUNT; i++) {
         if (strcmp(GLYPHS[i].ch, utf8) == 0) return &GLYPHS[i];
@@ -97,7 +87,6 @@ void drawStr(int x, int y, const char* s, uint16_t color) {
         if (g) {
             for (int row = 0; row < g->h; row++) {
                 uint16_t bits = (g->data[row * 2] << 8) | g->data[row * 2 + 1];
-                // 行内连续位 -> fillRect 批量
                 int run = 0;
                 for (int col = 0; col <= g->w; col++) {
                     bool on = (col < g->w) && (bits & (0x8000 >> col));
@@ -111,25 +100,10 @@ void drawStr(int x, int y, const char* s, uint16_t color) {
     tft.endWrite();
 }
 
-// ================= 鲸鱼绘制（RGB565 + 0x0000 颜色键） =================
+// ================= 鲸鱼绘制（TFT_eSPI pushImage + 0x0000 颜色键透明） =================
 void drawWhale(const uint16_t* frame) {
     int x = (240 - WHALE_W) / 2, y = 55;
-    tft.startWrite();
-    for (int yy = 0; yy < WHALE_H; yy++) {
-        int run = -1;
-        for (int xx = 0; xx <= WHALE_W; xx++) {
-            bool opaque = (xx < WHALE_W) && (frame[yy * WHALE_W + xx] != 0x0000);
-            if (opaque && run < 0) run = xx;
-            if ((!opaque || xx == WHALE_W) && run >= 0) {
-                int len = xx - run;
-                tft.setAddrWindow(x + run, y + yy, len, 1);
-                // writePixels 老 API 缺 const，帧数据本身只读，强转一下
-                tft.writePixels((uint16_t*)&frame[yy * WHALE_W + run], len, true, false);
-                run = -1;
-            }
-        }
-    }
-    tft.endWrite();
+    tft.pushImage(x, y, WHALE_W, WHALE_H, frame, 0x0000);
 }
 
 // ================= 状态 =================
@@ -216,7 +190,6 @@ void drawPetScreen() {
     drawBadge();
     char line[32]; snprintf(line, sizeof(line), "智能体: %s", agent);
     drawStr(10, 30, line, fg);
-    // 鲸鱼（按状态选动画）
     const char* an = animName(state);
     int ai = 0;
     for (int i = 0; i < WHALE_ANIM_COUNT; i++)
@@ -224,7 +197,6 @@ void drawPetScreen() {
     int fc = WHALE_ANIMS[ai].count;
     int idx = (millis() / ANIM_MS) % fc;
     drawWhale(WHALE_ANIMS[ai].frames[idx]);
-    // 底部 cpu
     char cpuTxt[24]; snprintf(cpuTxt, sizeof(cpuTxt), "cpu %d%%", cpu);
     drawStr(10, 224, cpuTxt, fg);
 }
@@ -260,17 +232,17 @@ void drawDeviceScreen() {
 // ================= 按键（单按钮：短按切屏 / 长按批准或刷新） =================
 void handleButtons() {
     if (digitalRead(BTN_MODE) == LOW) {
-        delay(40);                                   // 消抖
+        delay(40);
         if (digitalRead(BTN_MODE) != LOW) return;
         unsigned long t0 = millis();
         while (digitalRead(BTN_MODE) == LOW && millis() - t0 < 1200) delay(10);
         bool longPress = (millis() - t0) >= 1000;
-        while (digitalRead(BTN_MODE) == LOW) delay(10);   // 等松开
+        while (digitalRead(BTN_MODE) == LOW) delay(10);
         if (longPress) {
-            if (pending > 0) approve();              // 长按=批准（有待审批时）
-            else fetchStatus();                      // 否则刷新
+            if (pending > 0) approve();
+            else fetchStatus();
         } else {
-            screen = 1 - screen;                     // 短按=切换模式
+            screen = 1 - screen;
         }
     }
 }
@@ -280,9 +252,9 @@ void updateClock() {
     struct tm ti;
     if (getLocalTime(&ti, 200)) {
         strftime(clockStr, sizeof(clockStr), "%H:%M", &ti);
-    } else if (doc["ts"]) {           // 桥时间兜底
+    } else if (doc["ts"]) {
         time_t t = doc["ts"] | 0;
-        t += 8 * 3600;                // UTC+8
+        t += 8 * 3600;
         struct tm* p = gmtime(&t);
         snprintf(clockStr, sizeof(clockStr), "%02d:%02d", p->tm_hour, p->tm_min);
     }
@@ -291,11 +263,7 @@ void updateClock() {
 // ================= 主流程 =================
 void setup() {
     Serial.begin(115200);
-    pinMode(TFT_BLK, OUTPUT);
-    digitalWrite(TFT_BLK, HIGH);
-    SPI.begin(TFT_SCK, -1, TFT_MOSI, -1);      // 自定义引脚硬件 SPI
-    tft.setSPISpeed(8000000);                  // 8MHz，线材差更稳
-    tft.init(240, 240);
+    tft.init();
     tft.setRotation(0);
 
     // 开机自检：白屏 0.3s（能看到白闪=屏幕与 SPI 正常）
@@ -329,13 +297,11 @@ void loop() {
         updateClock();
     }
     handleButtons();
-    // 动画节拍重绘
     if (millis() - lastAnim >= ANIM_MS) {
         lastAnim = millis();
         if (screen == 0) drawPetScreen();
         else drawDeviceScreen();
     }
-    // WiFi 断线重连
     if (WiFi.status() != WL_CONNECTED && millis() - lastPoll > 15000) {
         WiFi.disconnect();
         WiFi.begin(WIFI_SSID, WIFI_PASS);
