@@ -10,8 +10,21 @@ import os
 
 from PIL import Image
 
-ASSETS = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                      "..", "..", "pi_client", "assets", "whale", "anims")
+def _find_assets():
+    """向上找仓库根目录下的 pi_client/assets/whale/anims。"""
+    p = os.path.dirname(os.path.abspath(__file__))
+    for _ in range(5):
+        cand = os.path.join(p, "pi_client", "assets", "whale", "anims")
+        if os.path.isdir(cand):
+            return cand
+        p = os.path.dirname(p)
+    return None
+
+
+ASSETS = _find_assets()
+if not ASSETS:
+    raise SystemExit("找不到鲸鱼娘素材（pi_client/assets/whale/anims）")
+# 输出到 .ino 同目录（Arduino 按草图目录找 #include "xxx.h"）
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "whale_frames.h")
 ANIMS = ["idle", "running", "waiting"]
 
@@ -64,7 +77,7 @@ def main():
         lines.append("static const uint16_t* const w_%s_frames[%d] PROGMEM = {%s};" % (
             anim, n, ",".join("w_%s_%d" % (anim, i) for i in range(n))))
     lines.append("")
-    lines.append("struct whale_anim_t { const char* name; int count; const uint16_t** frames; };")
+    lines.append("struct whale_anim_t { const char* name; int count; const uint16_t* const* frames; };")
     lines.append("static const whale_anim_t WHALE_ANIMS[%d] = {" % len(anims))
     for anim, n in anims:
         lines.append('    {"%s", %d, w_%s_frames},' % (anim, n, anim))

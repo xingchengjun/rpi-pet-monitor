@@ -123,7 +123,8 @@ void drawWhale(const uint16_t* frame) {
             if ((!opaque || xx == WHALE_W) && run >= 0) {
                 int len = xx - run;
                 tft.setAddrWindow(x + run, y + yy, len, 1);
-                tft.writePixels(&frame[yy * WHALE_W + run], len, true, false);
+                // writePixels 老 API 缺 const，帧数据本身只读，强转一下
+                tft.writePixels((uint16_t*)&frame[yy * WHALE_W + run], len, true, false);
                 run = -1;
             }
         }
