@@ -5,6 +5,7 @@ gen_font_cn.py — 生成 ESP32 中文字库 fonts_cn.h（12x16 单色位图，P
 输出：esp32_client/fonts_cn.h
 """
 import os
+import string
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -18,15 +19,20 @@ OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fonts_cn.h
 TEXTS = [
     "deepseek", "智能体: ", "空闲", "离线", "DSH 待审批", "codex 待审批",
     "codex + DSH", "设备状态", "待审批", "CPU", "内存", "GPU", "磁盘",
-    "cpu ", "桥离线", "AWAIT!", "0123456789", ":!%+ /.-",
+    "cpu ", "桥离线", "AWAIT!", "连接 WiFi...", "已连接", "WiFi 失败",
+    "0123456789", ":!%+ /.-",
 ]
 
 
 def collect_chars():
-    chars = set()
+    """全部可打印 ASCII + 中文，避免启动/状态文字缺字形。"""
+    chars = set(string.printable)
     for t in TEXTS:
         for ch in t:
             chars.add(ch)
+    for c in list(chars):
+        if c in "\t\n\r\x0b\x0c":
+            chars.discard(c)
     return sorted(chars)
 
 

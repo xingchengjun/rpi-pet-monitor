@@ -294,9 +294,15 @@ void setup() {
     pinMode(TFT_BLK, OUTPUT);
     digitalWrite(TFT_BLK, HIGH);
     SPI.begin(TFT_SCK, -1, TFT_MOSI, -1);      // 自定义引脚硬件 SPI
+    tft.setSPISpeed(8000000);                  // 8MHz，线材差更稳
     tft.init(240, 240);
     tft.setRotation(0);
+
+    // 开机自检：白屏 0.3s（能看到白闪=屏幕与 SPI 正常）
+    tft.fillScreen(0xFFFF);
+    delay(300);
     tft.fillScreen(C_OFF);
+    Serial.println("TFT init OK");
 
     pinMode(BTN_MODE, INPUT_PULLUP);
 
@@ -306,9 +312,11 @@ void setup() {
     unsigned long t0 = millis();
     while (WiFi.status() != WL_CONNECTED && millis() - t0 < 20000) delay(200);
     if (WiFi.status() == WL_CONNECTED) {
+        Serial.println("WiFi connected");
         configTime(8 * 3600, 0, "pool.ntp.org", "ntp.aliyun.com");
         drawStr(10, 120, "已连接", 0xFFFF);
     } else {
+        Serial.println("WiFi FAILED");
         drawStr(10, 120, "WiFi 失败", tft.color565(255, 80, 80));
     }
     delay(800);
