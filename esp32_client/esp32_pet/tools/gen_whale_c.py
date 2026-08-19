@@ -29,18 +29,21 @@ OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "whale_fram
 ANIMS = ["idle", "running", "waiting"]
 
 
+SCALE = 1.8   # 240x240 屏放大倍数（80x96 -> 144x173，贴底大鲸鱼）
+
+
 def rgb565(r, g, b):
     return ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3)
 
 
-def _frame_size(path, scale=1.5):
+def _frame_size(path, scale=SCALE):
     with Image.open(path) as im:
         w, h = im.size
     return int(w * scale + 0.5), int(h * scale + 0.5)
 
 
-def frame_to_565(path, scale=1.5):
-    """转 RGB565；scale>1 时先 LANCZOS 放大（240x240 屏按比例放大，原 80x96 -> 120x144）。"""
+def frame_to_565(path, scale=SCALE):
+    """转 RGB565；scale>1 时先 LANCZOS 放大（240x240 屏贴底大鲸鱼）。"""
     im = Image.open(path).convert("RGBA")
     if scale != 1.0:
         w, h = im.size

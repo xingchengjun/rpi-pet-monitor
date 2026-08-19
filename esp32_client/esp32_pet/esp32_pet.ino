@@ -95,15 +95,23 @@ void drawStr(int x, int y, const char* s, uint16_t color) {
                 }
             }
             cx += g->w;
-        } else cx += 12;
+        } else cx += 16;
     }
     tft.endWrite();
 }
 
 // ================= 鲸鱼绘制（TFT_eSPI pushImage + 0x0000 颜色键透明） =================
-void drawWhale(const uint16_t* frame) {
-    int x = (240 - WHALE_W) / 2, y = 62;
-    tft.pushImage(x, y, WHALE_W, WHALE_H, frame, 0x0000);
+// 按状态选动画帧，贴底放大显示
+void drawWhaleFrame() {
+    const char* an = animName(state);
+    int ai = 0;
+    for (int i = 0; i < WHALE_ANIM_COUNT; i++)
+        if (strcmp(WHALE_ANIMS[i].name, an) == 0) ai = i;
+    int fc = WHALE_ANIMS[ai].count;
+    int idx = (millis() / ANIM_MS) % fc;
+    int x = (240 - WHALE_W) / 2;
+    int y = 240 - WHALE_H;                    // 贴屏幕底部
+    tft.pushImage(x, y, WHALE_W, WHALE_H, WHALE_ANIMS[ai].frames[idx], 0x0000);
 }
 
 // ================= 状态 =================
@@ -172,33 +180,21 @@ void drawBadge() {
     if (pending <= 0) return;
     char b[8]; snprintf(b, sizeof(b), "!%d", pending);
     int w = textWidth(b) + 8;
-    int x = 240 - 10 - w, y = 2;
+    int x = 240 - 10 - w, y = 30;
     tft.fillRoundRect(x, y, w, 30, 8, tft.color565(255, 255, 255));
     drawStr(x + 4, y + 3, b, C_ALERT);
-}
-
-void drawHeader(uint16_t fg) {
-    drawStr(10, 4, "deepseek", fg);
-    int tw = textWidth(clockStr);
-    drawStr(240 - 10 - tw, 4, clockStr, C_ORANGE);
 }
 
 void drawPetScreen() {
     uint16_t bg = bgColor(state), fg = fgColor(state);
     tft.fillScreen(bg);
-    drawHeader(fg);
-    drawBadge();
+    // 左上：智能体（替代原 deepseek 位置）；右上：时间
     char line[32]; snprintf(line, sizeof(line), "智能体: %s", agent);
-    drawStr(10, 36, line, fg);
-    const char* an = animName(state);
-    int ai = 0;
-    for (int i = 0; i < WHALE_ANIM_COUNT; i++)
-        if (strcmp(WHALE_ANIMS[i].name, an) == 0) ai = i;
-    int fc = WHALE_ANIMS[ai].count;
-    int idx = (millis() / ANIM_MS) % fc;
-    drawWhale(WHALE_ANIMS[ai].frames[idx]);
-    char cpuTxt[24]; snprintf(cpuTxt, sizeof(cpuTxt), "cpu %d%%", cpu);
-    drawStr(10, 214, cpuTxt, fg);
+    drawStr(8, 4, line, fg);
+    int tw = textWidth(clockStr);
+    drawStr(240 - 8 - tw, 4, clockStr, C_ORANGE);
+    drawBadge();
+    drawWhaleFrame();                       // 大鲸鱼贴底
 }
 
 void drawGauge(int x, int y, int w, int h, const char* title, int pct,
@@ -215,18 +211,19 @@ void drawGauge(int x, int y, int w, int h, const char* title, int pct,
 void drawDeviceScreen() {
     uint16_t bg = bgColor(state), fg = fgColor(state);
     tft.fillScreen(bg);
-    drawHeader(fg);
-    drawStr(10, 36, "设备状态", fg);
-    if (pending > 0) { char b[16]; snprintf(b, sizeof(b), "%d 待审批", pending); drawStr(240 - 10 - textWidth(b), 36, b, C_ALERT); }
+    drawStr(8, 4, "设备状态", fg);
+    int tw = textWidth(clockStr);
+    drawStr(240 - 8 - tw, 4, clockStr, C_ORANGE);
+    if (pending > 0) { char b[16]; snprintf(b, sizeof(b), "%d 待审批", pending); drawStr(240 - 10 - textWidth(b), 32, b, C_ALERT); }
     if (state == 3) { drawStr(10, 90, "桥离线", fg); return; }
 
     int margin = 6, gap = 8;
     int cw = (240 - margin * 2 - gap) / 2;
-    int ch = (236 - 48 - gap) / 2;
-    drawGauge(margin, 48, cw, ch, "CPU", cpu, tft.color565(90, 170, 250), fg, NULL);
-    drawGauge(margin + cw + gap, 48, cw, ch, "内存", mem, tft.color565(110, 230, 140), fg, NULL);
-    drawGauge(margin, 48 + ch + gap, cw, ch, "GPU", gpu, tft.color565(200, 140, 255), fg, NULL);
-    drawGauge(margin + cw + gap, 48 + ch + gap, cw, ch, "磁盘", disk, tft.color565(255, 200, 70), fg, NULL);
+    int ch = (236 - 40 - gap) / 2;
+    drawGauge(margin, 40, cw, ch, "CPU", cpu, tft.color565(90, 170, 250), fg, NULL);
+    drawGauge(margin + cw + gap, 40, cw, ch, "内存", mem, tft.color565(110, 230, 140), fg, NULL);
+    drawGauge(margin, 40 + ch + gap, cw, ch, "GPU", gpu, tft.color565(200, 140, 255), fg, NULL);
+    drawGauge(margin + cw + gap, 40 + ch + gap, cw, ch, "磁盘", disk, tft.color565(255, 200, 70), fg, NULL);
 }
 
 // ================= 按键（单按钮：短按切屏 / 长按批准或刷新） =================
@@ -290,6 +287,18 @@ void setup() {
     delay(800);
 }
 
+// 增量渲染：状态变化才整屏重绘（不闪）；动画节拍只推鲸鱼帧
+int lastKey = -1;
+int lastScreen = -1;
+
+int statusKey() {
+    int k = state * 100000 + pending * 1000 + cpu * 10 + mem;
+    k = k * 10 + gpu;
+    k = k * 10 + disk;
+    k = k * 10 + (clockStr[3] - '0');   // 分钟变化也重绘
+    return k;
+}
+
 void loop() {
     if (millis() - lastPoll >= POLL_MS) {
         lastPoll = millis();
@@ -297,10 +306,20 @@ void loop() {
         updateClock();
     }
     handleButtons();
+    if (screen != lastScreen) {         // 切屏立即整屏重绘
+        lastScreen = screen;
+        lastKey = -1;
+    }
     if (millis() - lastAnim >= ANIM_MS) {
         lastAnim = millis();
-        if (screen == 0) drawPetScreen();
-        else drawDeviceScreen();
+        int key = statusKey();
+        if (key != lastKey) {
+            lastKey = key;
+            if (screen == 0) drawPetScreen();
+            else drawDeviceScreen();
+        } else if (screen == 0) {
+            drawWhaleFrame();           // 背景不变，只换鲸鱼帧，不闪
+        }
     }
     if (WiFi.status() != WL_CONNECTED && millis() - lastPoll > 15000) {
         WiFi.disconnect();
