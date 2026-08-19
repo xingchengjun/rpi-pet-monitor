@@ -31,7 +31,7 @@ const char* BRIDGE_HOST = "192.168.3.8";   // 电脑 IP
 const int   BRIDGE_PORT = 8123;
 const char* BRIDGE_TOKEN = "c440337ac660451abb9cb9f95f27e909";   // 与 bridge_config.json 一致
 #define POLL_MS 2000                        // 轮询间隔
-#define ANIM_MS 125                         // 动画帧间隔 (8fps)
+#define ANIM_MS 250                         // 动画帧间隔（放慢 2 倍，原 125）
 
 // 模式切换按钮（接 GND，内部上拉）
 #define BTN_MODE 0
