@@ -285,7 +285,7 @@ def dsh_status(now):
 # ---- DSH 待审批检测（本机无 zstd，借道树莓派 zstd CLI 解压尾部）----
 _PI_CACHE = {"key": None, "ts": 0.0, "pending": 0}
 _PI_QUIET_S = 3.0          # 文件停写 N 秒才判定可能待审批
-_PI_MIN_INTERVAL = 10.0    # 两次解压最小间隔
+_PI_MIN_INTERVAL = 6.0     # 两次解压最小间隔
 
 
 def _dsh_pending_via_pi(path, mtime, size):
@@ -320,12 +320,12 @@ def _dsh_pending_via_pi(path, mtime, size):
 
 
 def _dsh_pending_parse(tail):
-    """在解压后的尾部里找"请求了但未见结果"的审批型工具调用。
+    """尾部"未闭环且需要用户响应"的工具调用数。
 
-    特征：tool/call 的 arguments 含 sandbox_permissions / justification
-    （这类调用需要用户审批，通过前不会出现对应 tool/result）。
+    用户响应型：ask_user_question（问答）或带 sandbox_permissions / justification
+    （审批升级）。普通工具（pwsh/web_search 等）执行中不计数，避免误报红屏。
     """
-    pending = {}
+    calls = {}          # cid -> [is_user_wait, resolved]
     order = []
     for line in tail.splitlines():
         try:
@@ -335,22 +335,30 @@ def _dsh_pending_parse(tail):
         t = obj.get("type")
         if t == "tool/call":
             d = obj.get("data") or {}
-            args = d.get("arguments") or ""
             cid = d.get("callId")
-            if cid and re.search(r"sandbox_permissions|justification|danger-full-access", args):
-                if cid not in pending:
-                    pending[cid] = False
-                    order.append(cid)
+            if not cid:
+                continue
+            args = d.get("arguments") or ""
+            name = d.get("name") or ""
+            user_wait = (name == "ask_user_question" or bool(
+                re.search(r"sandbox_permissions|justification|danger-full-access", args)))
+            if cid not in calls:
+                calls[cid] = [user_wait, False]
+                order.append(cid)
         elif t == "tool/result":
             cid = ((obj.get("data") or {}).get("message") or {}).get("source", {}).get("callId")
-            if cid in pending:
-                pending[cid] = True
+            if cid in calls:
+                calls[cid][1] = True
+    # 只统计文件末尾连续未闭环且属于"用户响应型"的调用
     count = 0
     for cid in reversed(order):
-        if pending.get(cid) is False:
+        user_wait, resolved = calls[cid]
+        if not resolved and user_wait:
             count += 1
+        elif not resolved:
+            break      # 末尾是普通工具在执行中：不报
         else:
-            break
+            break      # 末尾已闭环：不报
     return count
 
 
