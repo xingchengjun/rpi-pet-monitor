@@ -25,28 +25,35 @@
 | VCC | 3V3 | |
 | GND | GND | |
 
-按键（K1-K4，接 GND，内部上拉，**可改代码 BTN_* 引脚**）：
-K1=GPIO4  K2=GPIO6  K3=GPIO7  K4=GPIO8
+按键（模式切换，接 GND，内部上拉，**可改代码 BTN_MODE 引脚**）：
+**MODE = GPIO4**
 
 > ESP32-C3 的 GPIO11/12 是 flash 引脚勿用；GPIO18/19 是 USB 勿用。若按键与屏有冲突按需换。
 
+## Token 是什么 / 怎么填
+
+桥服务用 token 做访问认证（防止局域网内别人乱调 `/status`、`/approve`）：
+
+1. 电脑端 `pc_bridge/bridge_config.json` 里的 `"token"` 字段就是 token（当前是随机生成的，如 `c440337ac660451abb9cb9f95f27e909`）
+2. ESP32 固件顶部 `BRIDGE_TOKEN` **填同一个值**（改桥的 token 后 ESP32 也要同步改）
+3. 树莓派版 `pi_client/pet_config.json` 也用同一个值
+
 ## 配置与烧录
 
-1. 打开 `esp32_pet.ino`，改顶部配置：
+1. 打开 `esp32_pet/esp32_pet.ino`，改顶部配置：
    - `WIFI_SSID` / `WIFI_PASS`
-   - `BRIDGE_HOST`（电脑 IP，如 192.168.3.8）、`BRIDGE_TOKEN`（与 bridge_config.json 一致）
+   - `BRIDGE_HOST`（电脑 IP，如 192.168.3.8）
+   - `BRIDGE_TOKEN`（= bridge_config.json 的 token，见上）
 2. Arduino IDE：开发板选 **ESP32C3 Dev Module**（需装 esp32 板支持包）；USB 选择对应串口
 3. 上传，串口监视器看 `连接 WiFi...` → `已连接`
 4. 电脑端确保 bridge.py 在运行（token 一致）
 
-## 按键逻辑
+## 按键逻辑（单按钮）
 
-| 按键 | 有待审批时 | 空闲时 |
-|---|---|---|
-| K1 | **批准**（POST /approve，桥向电脑前台窗口发回车） | 桌宠屏 ⇄ 设备屏 |
-| K2 | 桌宠屏 ⇄ 设备屏 | 桌宠屏 ⇄ 设备屏 |
-| K3 | 立即刷新 | 立即刷新 |
-| K4 | 背光开关 | 背光开关 |
+| 操作 | 效果 |
+|---|---|
+| **短按** | 桌宠屏 ⇄ 设备屏（模式切换） |
+| **长按（>1s）** | 有待审批时 = **批准**（POST /approve，桥向电脑前台窗口发回车）；否则 = 立即刷新 |
 
 ## 界面（240x240 方形布局）
 

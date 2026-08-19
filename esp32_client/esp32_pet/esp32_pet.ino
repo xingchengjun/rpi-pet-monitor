@@ -13,8 +13,8 @@
  *   SCK  -> GPIO5     SDA(MOSI) -> GPIO1
  *   RES  -> GPIO2     DC -> GPIO3
  *   BLK  -> GPIO10    CS -> GND（板上唯一 SPI 设备）
- * 按键（可改 BTN_*）：
- *   K1=GPIO4  K2=GPIO6  K3=GPIO7  K4=GPIO8 （接 GND，内部上拉）
+ * 模式切换按钮（可改 BTN_MODE）：
+ *   MODE -> GPIO4（接 GND；短按切屏，长按批准/刷新）
  */
 
 #include <WiFi.h>
@@ -26,11 +26,11 @@
 #include "whale_frames.h"
 
 // ================= 配置（改这里） =================
-const char* WIFI_SSID = "YOUR_WIFI_SSID";
-const char* WIFI_PASS = "YOUR_WIFI_PASS";
+const char* WIFI_SSID = "202";
+const char* WIFI_PASS = "13865520711";
 const char* BRIDGE_HOST = "192.168.3.8";   // 电脑 IP
 const int   BRIDGE_PORT = 8123;
-const char* BRIDGE_TOKEN = "YOUR_TOKEN";   // 与 bridge_config.json 一致
+const char* BRIDGE_TOKEN = "c440337ac660451abb9cb9f95f27e909";   // 与 bridge_config.json 一致
 #define POLL_MS 2000                        // 轮询间隔
 #define ANIM_MS 125                         // 动画帧间隔 (8fps)
 
@@ -41,11 +41,9 @@ const char* BRIDGE_TOKEN = "YOUR_TOKEN";   // 与 bridge_config.json 一致
 #define TFT_RST 2
 #define TFT_BLK 10
 
-// 按键引脚（低电平触发）
-#define BTN_K1 4
-#define BTN_K2 6
-#define BTN_K3 7
-#define BTN_K4 8
+// 模式切换按钮（接 GND，内部上拉）
+// 短按 = 切换 桌宠屏 ⇄ 设备屏；长按(>1s) = 有待审批时批准，否则立即刷新
+#define BTN_MODE 4
 
 // ================= 全局 =================
 Adafruit_ST7789 tft = Adafruit_ST7789(&SPI, -1 /*CS=GND*/, TFT_DC, TFT_RST);
@@ -258,30 +256,20 @@ void drawDeviceScreen() {
     drawGauge(margin + cw + gap, 44 + ch + gap, cw, ch, "磁盘", disk, tft.color565(255, 200, 70), fg, NULL);
 }
 
-// ================= 按键 =================
+// ================= 按键（单按钮：短按切屏 / 长按批准或刷新） =================
 void handleButtons() {
-    if (digitalRead(BTN_K1) == LOW) {
-        delay(50);
-        if (digitalRead(BTN_K1) == LOW) {
-            if (pending > 0) { approve(); delay(200); }
-            else screen = 1 - screen;
-            while (digitalRead(BTN_K1) == LOW) delay(10);
-        }
-    }
-    if (digitalRead(BTN_K2) == LOW) {
-        delay(50);
-        if (digitalRead(BTN_K2) == LOW) { screen = 1 - screen; while (digitalRead(BTN_K2) == LOW) delay(10); }
-    }
-    if (digitalRead(BTN_K3) == LOW) {
-        delay(50);
-        if (digitalRead(BTN_K3) == LOW) { fetchStatus(); while (digitalRead(BTN_K3) == LOW) delay(10); }
-    }
-    if (digitalRead(BTN_K4) == LOW) {
-        delay(50);
-        if (digitalRead(BTN_K4) == LOW) {
-            backlight = !backlight;
-            digitalWrite(TFT_BLK, backlight ? HIGH : LOW);
-            while (digitalRead(BTN_K4) == LOW) delay(10);
+    if (digitalRead(BTN_MODE) == LOW) {
+        delay(40);                                   // 消抖
+        if (digitalRead(BTN_MODE) != LOW) return;
+        unsigned long t0 = millis();
+        while (digitalRead(BTN_MODE) == LOW && millis() - t0 < 1200) delay(10);
+        bool longPress = (millis() - t0) >= 1000;
+        while (digitalRead(BTN_MODE) == LOW) delay(10);   // 等松开
+        if (longPress) {
+            if (pending > 0) approve();              // 长按=批准（有待审批时）
+            else fetchStatus();                      // 否则刷新
+        } else {
+            screen = 1 - screen;                     // 短按=切换模式
         }
     }
 }
@@ -309,10 +297,7 @@ void setup() {
     tft.setRotation(0);
     tft.fillScreen(C_OFF);
 
-    pinMode(BTN_K1, INPUT_PULLUP);
-    pinMode(BTN_K2, INPUT_PULLUP);
-    pinMode(BTN_K3, INPUT_PULLUP);
-    pinMode(BTN_K4, INPUT_PULLUP);
+    pinMode(BTN_MODE, INPUT_PULLUP);
 
     drawStr(10, 100, "连接 WiFi...", 0xFFFF);
     WiFi.mode(WIFI_STA);
