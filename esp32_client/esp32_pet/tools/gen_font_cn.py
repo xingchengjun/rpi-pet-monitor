@@ -73,7 +73,9 @@ def main():
         name = "g_" + "".join("%02X" % b for b in ch.encode("utf-8"))
         lines.append("static const uint8_t %s[%d] PROGMEM = {%s};" % (
             name, len(data), ",".join(str(b) for b in data)))
-        entries.append('    {"%s", %d, %d, %s},' % (ch, CELL_W, CELL_H, name))
+        # C 字符串转义（引号/反斜杠必须转义，否则编译报错）
+        esc = ch.replace("\\", "\\\\").replace('"', '\\"')
+        entries.append('    {"%s", %d, %d, %s},' % (esc, CELL_W, CELL_H, name))
     lines.append("")
     lines.append("static const glyph_t GLYPHS[] PROGMEM = {")
     lines.extend(entries)
