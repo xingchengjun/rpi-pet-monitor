@@ -9,6 +9,7 @@ pc_bridge/bridge.log
 design/whale_raw/
 design/whale_assets/
 pi_client/assets/whale/
+esp32_client/whale_frames.h
 
 # ---- 生成物 / 缓存 ----
 preview_out/
