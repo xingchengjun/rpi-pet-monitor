@@ -11,8 +11,9 @@ from PIL import Image, ImageDraw, ImageFont
 
 CELL_W, CELL_H = 16, 24        # 240x240 屏放大版（原来 12x16）
 FONT_CANDIDATES = [
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "DroidSansFallbackFull.ttf"),  # Apache 2.0，优先
-    "C:/Windows/Fonts/msyh.ttc",                                                          # 兜底
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "NotoSansCJK-Regular.ttc"),  # 含拉丁+数字+CJK，OFL
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "DroidSansFallbackFull.ttf"),  # 兜底
+    "C:/Windows/Fonts/msyh.ttc",
 ]
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fonts_cn.h")
 
@@ -37,17 +38,25 @@ def collect_chars():
 
 
 def render(ch, font):
+    """渲染字形，返回 (实际宽度, 位图数据)。宽度按字形 bbox 裁剪（数字窄、汉字宽）。"""
     img = Image.new("L", (CELL_W, CELL_H), 0)
     d = ImageDraw.Draw(img)
     d.text((0, 0), ch, font=font, fill=255)
+    bbox = img.getbbox()
+    w = CELL_W
+    if bbox:
+        w = max(1, min(CELL_W, bbox[2] - bbox[0]))
+        img = img.crop((0, 0, w, CELL_H))
+    else:
+        img = img.crop((0, 0, 1, CELL_H))          # 空格等空字形，宽 1
     rows = []
     for y in range(CELL_H):
         row = 0
-        for x in range(CELL_W):
+        for x in range(img.size[0]):
             if img.getpixel((x, y)) > 127:
                 row |= (0x8000 >> x)
         rows.append(row)
-    return bytes(b for r in rows for b in (r >> 8, r & 0xFF))
+    return w, bytes(b for r in rows for b in (r >> 8, r & 0xFF))
 
 
 def main():
@@ -69,13 +78,13 @@ def main():
              ""]
     entries = []
     for ch in chars:
-        data = render(ch, font)
+        w, data = render(ch, font)
         name = "g_" + "".join("%02X" % b for b in ch.encode("utf-8"))
         lines.append("static const uint8_t %s[%d] = {%s};" % (
             name, len(data), ",".join(str(b) for b in data)))
         # C 字符串转义（引号/反斜杠必须转义，否则编译报错）
         esc = ch.replace("\\", "\\\\").replace('"', '\\"')
-        entries.append('    {"%s", %d, %d, %s},' % (esc, CELL_W, CELL_H, name))
+        entries.append('    {"%s", %d, %d, %s},' % (esc, w, CELL_H, name))
     lines.append("")
     lines.append("static const glyph_t GLYPHS[] = {")
     lines.extend(entries)
