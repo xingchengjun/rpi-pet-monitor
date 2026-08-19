@@ -9,7 +9,7 @@ import string
 
 from PIL import Image, ImageDraw, ImageFont
 
-CELL_W, CELL_H = 12, 16
+CELL_W, CELL_H = 16, 24        # 240x240 屏放大版（原来 12x16）
 FONT_CANDIDATES = [
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "DroidSansFallbackFull.ttf"),  # Apache 2.0，优先
     "C:/Windows/Fonts/msyh.ttc",                                                          # 兜底
@@ -54,7 +54,7 @@ def main():
     font = None
     for p in FONT_CANDIDATES:
         try:
-            font = ImageFont.truetype(p, 15)   # 15px 渲染进 12x16 格
+            font = ImageFont.truetype(p, 22)   # 22px 渲染进 16x24 格
             print("字体:", p)
             break
         except Exception:
@@ -62,7 +62,7 @@ def main():
     if font is None:
         raise SystemExit("找不到可用字体")
     chars = collect_chars()
-    lines = ["// 自动生成（gen_font_cn.py），勿手改。12x16 单色位图，每行 2 字节大端。",
+    lines = ["// 自动生成（gen_font_cn.py），勿手改。16x24 单色位图，每行 2 字节大端。",
              "#pragma once",
              "#include <Arduino.h>",
              "struct glyph_t { const char* ch; uint8_t w; uint8_t h; const uint8_t* data; };",
@@ -71,13 +71,13 @@ def main():
     for ch in chars:
         data = render(ch, font)
         name = "g_" + "".join("%02X" % b for b in ch.encode("utf-8"))
-        lines.append("static const uint8_t %s[%d] PROGMEM = {%s};" % (
+        lines.append("static const uint8_t %s[%d] = {%s};" % (
             name, len(data), ",".join(str(b) for b in data)))
         # C 字符串转义（引号/反斜杠必须转义，否则编译报错）
         esc = ch.replace("\\", "\\\\").replace('"', '\\"')
         entries.append('    {"%s", %d, %d, %s},' % (esc, CELL_W, CELL_H, name))
     lines.append("")
-    lines.append("static const glyph_t GLYPHS[] PROGMEM = {")
+    lines.append("static const glyph_t GLYPHS[] = {")
     lines.extend(entries)
     lines.append("};")
     lines.append("static const int GLYPH_COUNT = sizeof(GLYPHS) / sizeof(glyph_t);")

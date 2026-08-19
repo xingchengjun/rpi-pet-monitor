@@ -33,8 +33,18 @@ def rgb565(r, g, b):
     return ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3)
 
 
-def frame_to_565(path):
+def _frame_size(path, scale=1.5):
+    with Image.open(path) as im:
+        w, h = im.size
+    return int(w * scale + 0.5), int(h * scale + 0.5)
+
+
+def frame_to_565(path, scale=1.5):
+    """转 RGB565；scale>1 时先 LANCZOS 放大（240x240 屏按比例放大，原 80x96 -> 120x144）。"""
     im = Image.open(path).convert("RGBA")
+    if scale != 1.0:
+        w, h = im.size
+        im = im.resize((int(w * scale + 0.5), int(h * scale + 0.5)), Image.LANCZOS)
     w, h = im.size
     out = []
     for y in range(h):
@@ -63,18 +73,17 @@ def main():
             print("缺少动画:", anim)
             continue
         for i, fp in enumerate(frames):
+            data = frame_to_565(fp)          # 内部已放大
             if w is None:
-                with Image.open(fp) as im:
-                    w, h = im.size
-            data = frame_to_565(fp)
-            lines.append("static const uint16_t w_%s_%d[%d] PROGMEM = {%s};" % (
+                w, h = _frame_size(fp)
+            lines.append("static const uint16_t w_%s_%d[%d] = {%s};" % (
                 anim, i, len(data), ",".join(str(v) for v in data)))
         anims.append((anim, len(frames)))
     lines[3] = lines[3] % w
     lines[4] = lines[4] % h
     lines.append("")
     for anim, n in anims:
-        lines.append("static const uint16_t* const w_%s_frames[%d] PROGMEM = {%s};" % (
+        lines.append("static const uint16_t* const w_%s_frames[%d] = {%s};" % (
             anim, n, ",".join("w_%s_%d" % (anim, i) for i in range(n))))
     lines.append("")
     lines.append("struct whale_anim_t { const char* name; int count; const uint16_t* const* frames; };")

@@ -25,11 +25,11 @@
 #include "whale_frames.h"
 
 // ================= 配置（改这里） =================
-const char* WIFI_SSID = "YOUR_WIFI_SSID";
-const char* WIFI_PASS = "YOUR_WIFI_PASS";
+const char* WIFI_SSID = "202";
+const char* WIFI_PASS = "13865520711";
 const char* BRIDGE_HOST = "192.168.3.8";   // 电脑 IP
 const int   BRIDGE_PORT = 8123;
-const char* BRIDGE_TOKEN = "YOUR_TOKEN";   // 与 bridge_config.json 一致
+const char* BRIDGE_TOKEN = "c440337ac660451abb9cb9f95f27e909";   // 与 bridge_config.json 一致
 #define POLL_MS 2000                        // 轮询间隔
 #define ANIM_MS 125                         // 动画帧间隔 (8fps)
 
@@ -102,7 +102,7 @@ void drawStr(int x, int y, const char* s, uint16_t color) {
 
 // ================= 鲸鱼绘制（TFT_eSPI pushImage + 0x0000 颜色键透明） =================
 void drawWhale(const uint16_t* frame) {
-    int x = (240 - WHALE_W) / 2, y = 55;
+    int x = (240 - WHALE_W) / 2, y = 62;
     tft.pushImage(x, y, WHALE_W, WHALE_H, frame, 0x0000);
 }
 
@@ -172,15 +172,15 @@ void drawBadge() {
     if (pending <= 0) return;
     char b[8]; snprintf(b, sizeof(b), "!%d", pending);
     int w = textWidth(b) + 8;
-    int x = 240 - 10 - w, y = 4;
-    tft.fillRoundRect(x, y, w, 18, 6, tft.color565(255, 255, 255));
-    drawStr(x + 4, y + 1, b, C_ALERT);
+    int x = 240 - 10 - w, y = 2;
+    tft.fillRoundRect(x, y, w, 30, 8, tft.color565(255, 255, 255));
+    drawStr(x + 4, y + 3, b, C_ALERT);
 }
 
 void drawHeader(uint16_t fg) {
-    drawStr(10, 6, "deepseek", fg);
+    drawStr(10, 4, "deepseek", fg);
     int tw = textWidth(clockStr);
-    drawStr(240 - 10 - tw, 6, clockStr, C_ORANGE);
+    drawStr(240 - 10 - tw, 4, clockStr, C_ORANGE);
 }
 
 void drawPetScreen() {
@@ -189,7 +189,7 @@ void drawPetScreen() {
     drawHeader(fg);
     drawBadge();
     char line[32]; snprintf(line, sizeof(line), "智能体: %s", agent);
-    drawStr(10, 30, line, fg);
+    drawStr(10, 36, line, fg);
     const char* an = animName(state);
     int ai = 0;
     for (int i = 0; i < WHALE_ANIM_COUNT; i++)
@@ -198,7 +198,7 @@ void drawPetScreen() {
     int idx = (millis() / ANIM_MS) % fc;
     drawWhale(WHALE_ANIMS[ai].frames[idx]);
     char cpuTxt[24]; snprintf(cpuTxt, sizeof(cpuTxt), "cpu %d%%", cpu);
-    drawStr(10, 224, cpuTxt, fg);
+    drawStr(10, 214, cpuTxt, fg);
 }
 
 void drawGauge(int x, int y, int w, int h, const char* title, int pct,
@@ -206,27 +206,27 @@ void drawGauge(int x, int y, int w, int h, const char* title, int pct,
     tft.drawRoundRect(x, y, w, h, 8, fg);
     int fh = (h - 2) * pct / 100;
     if (fh > 0) tft.fillRect(x + 2, y + h - fh, w - 4, fh, color);
-    drawStr(x + 5, y + 3, title, fg);
+    drawStr(x + 5, y + 4, title, fg);
     char pctTxt[8]; snprintf(pctTxt, sizeof(pctTxt), "%d%%", pct);
-    drawStr(x + w - 5 - textWidth(pctTxt), y + h - 20, pctTxt, fg);
-    if (extra && extra[0]) drawStr(x + 5, y + h - 20, extra, fg);
+    drawStr(x + w - 5 - textWidth(pctTxt), y + h - 28, pctTxt, fg);
+    if (extra && extra[0]) drawStr(x + 5, y + h - 28, extra, fg);
 }
 
 void drawDeviceScreen() {
     uint16_t bg = bgColor(state), fg = fgColor(state);
     tft.fillScreen(bg);
     drawHeader(fg);
-    drawStr(10, 30, "设备状态", fg);
-    if (pending > 0) { char b[16]; snprintf(b, sizeof(b), "%d 待审批", pending); drawStr(240 - 10 - textWidth(b), 30, b, C_ALERT); }
-    if (state == 3) { drawStr(10, 80, "桥离线", fg); return; }
+    drawStr(10, 36, "设备状态", fg);
+    if (pending > 0) { char b[16]; snprintf(b, sizeof(b), "%d 待审批", pending); drawStr(240 - 10 - textWidth(b), 36, b, C_ALERT); }
+    if (state == 3) { drawStr(10, 90, "桥离线", fg); return; }
 
     int margin = 6, gap = 8;
     int cw = (240 - margin * 2 - gap) / 2;
-    int ch = (236 - 44 - gap) / 2;
-    drawGauge(margin, 44, cw, ch, "CPU", cpu, tft.color565(90, 170, 250), fg, NULL);
-    drawGauge(margin + cw + gap, 44, cw, ch, "内存", mem, tft.color565(110, 230, 140), fg, NULL);
-    drawGauge(margin, 44 + ch + gap, cw, ch, "GPU", gpu, tft.color565(200, 140, 255), fg, NULL);
-    drawGauge(margin + cw + gap, 44 + ch + gap, cw, ch, "磁盘", disk, tft.color565(255, 200, 70), fg, NULL);
+    int ch = (236 - 48 - gap) / 2;
+    drawGauge(margin, 48, cw, ch, "CPU", cpu, tft.color565(90, 170, 250), fg, NULL);
+    drawGauge(margin + cw + gap, 48, cw, ch, "内存", mem, tft.color565(110, 230, 140), fg, NULL);
+    drawGauge(margin, 48 + ch + gap, cw, ch, "GPU", gpu, tft.color565(200, 140, 255), fg, NULL);
+    drawGauge(margin + cw + gap, 48 + ch + gap, cw, ch, "磁盘", disk, tft.color565(255, 200, 70), fg, NULL);
 }
 
 // ================= 按键（单按钮：短按切屏 / 长按批准或刷新） =================
