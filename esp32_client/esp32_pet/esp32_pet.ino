@@ -262,6 +262,7 @@ void setup() {
     Serial.begin(115200);
     tft.init();
     tft.setRotation(0);
+    tft.setSwapBytes(true);      // 鲸鱼 RGB565 数据按 BGR 面板换字节（修复花屏）
 
     // 开机自检：白屏 0.3s（能看到白闪=屏幕与 SPI 正常）
     tft.fillScreen(0xFFFF);
