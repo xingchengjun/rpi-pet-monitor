@@ -48,3 +48,6 @@ verify_art.py
 test_gpio_pi.py
 pc_bridge/check_fflate.js
 pc_bridge/zstd_helper.js
+
+# ESP32 客户端（独立仓库 esp32-pet-monitor，含真实 Token 的烧录副本，不入本仓库）
+esp32_client/
