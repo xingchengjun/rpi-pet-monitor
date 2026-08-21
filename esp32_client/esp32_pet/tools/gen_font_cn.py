@@ -57,7 +57,7 @@ def render(ch, font):
             if img.getpixel((x, y)) > 127:
                 row |= (0x800000 >> x)
         rows.append(row)
-    return w, bytes(b for r in rows for b in (r >> 16, r >> 8, r & 0xFF))
+    return w, bytes(b for r in rows for b in (r >> 16, (r >> 8) & 0xFF, r & 0xFF))
 
 
 def load_cjk_font(path, size):
@@ -86,7 +86,7 @@ def main():
     if font is None:
         raise SystemExit("找不到可用字体")
     chars = collect_chars()
-    lines = ["// 自动生成（gen_font_cn.py），勿手改。16x24 单色位图，每行 2 字节大端。",
+    lines = ["// 自动生成（gen_font_cn.py），勿手改。24x24 单色位图，每行 3 字节大端。",
              "#pragma once",
              "#include <Arduino.h>",
              "struct glyph_t { const char* ch; uint8_t w; uint8_t h; const uint8_t* data; };",
