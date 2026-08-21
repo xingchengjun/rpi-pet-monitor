@@ -47,7 +47,8 @@ def render(ch, font):
     w = CELL_W
     if bbox:
         w = max(1, min(CELL_W, bbox[2] - bbox[0]))
-        img = img.crop((0, 0, w, CELL_H))
+        # 关键：裁切到 bbox 本身（从 bbox[0] 列起），否则右侧墨迹被切
+        img = img.crop((bbox[0], 0, bbox[2], CELL_H))
     else:
         img = img.crop((0, 0, 1, CELL_H))          # 空格等空字形，宽 1
     rows = []
@@ -61,16 +62,16 @@ def render(ch, font):
 
 
 def load_cjk_font(path, size):
-    """优先加载 ttc 里的简体中文(SC)面，避免日式字形。"""
-    for idx in range(8):
+    """Noto CJK ttc 固定用 SC(简体,索引2)，避免其他面字形异常。"""
+    for idx in (2, 0, 1, 3):
         try:
             f = ImageFont.truetype(path, size, index=idx)
             name = f.getname()[0]
-            if "SC" in name.upper():
-                print("用 SC 面:", name)
+            if "SC" in name.upper() or idx == 0:
+                print("用面 idx=%d: %s" % (idx, name))
                 return f
         except Exception:
-            break
+            continue
     return ImageFont.truetype(path, size)
 
 
