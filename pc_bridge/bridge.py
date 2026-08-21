@@ -272,7 +272,7 @@ def dsh_status(now):
         out["sessions"] = _count_dsh_sessions(root)
         # 待审批检测（借道树莓派 zstd 解压，带缓存；仅 1 小时窗口内有效）
         if now - mt <= CONFIG["activity"].get("pending_window_s", 3600):
-            n = _dsh_pending_via_pi(newest, mt, os.path.getsize(newest))
+            n = _dsh_pending_local(newest, mt, os.path.getsize(newest))
             out["pending_approvals"] = n
             out["awaiting"] = n > 0
             if n > 0:
@@ -286,36 +286,29 @@ def dsh_status(now):
 _PI_CACHE = {"key": None, "ts": 0.0, "pending": 0}
 _PI_QUIET_S = 3.0          # 文件停写 N 秒才判定可能待审批
 _PI_MIN_INTERVAL = 6.0     # 两次解压最小间隔
+_ZSTD_EXE = "C:/msys64/ucrt64/bin/zstd.exe"   # 本机 MSYS2 自带 zstd，无需树莓派
 
 
-def _dsh_pending_via_pi(path, mtime, size):
+def _dsh_pending_local(path, mtime, size):
     now = time.time()
     key = (path, round(mtime, 1), size)
     if _PI_CACHE["key"] == key and now - _PI_CACHE["ts"] < 20:
         return _PI_CACHE["pending"]
     if now - mtime < _PI_QUIET_S or now - _PI_CACHE["ts"] < _PI_MIN_INTERVAL:
         return _PI_CACHE["pending"]
-    cfg = CONFIG.get("pi_ssh") or {}
-    if not cfg.get("host"):
-        return 0
     try:
-        import paramiko
-        cli = paramiko.SSHClient()
-        cli.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        cli.connect(cfg["host"], username=cfg["user"], password=cfg["password"], timeout=6)
-        sftp = cli.open_sftp()
-        sftp.put(path, "/tmp/pet_sess.zst")
-        sftp.close()
-        _, out, _ = cli.exec_command(
-            "zstd -dc /tmp/pet_sess.zst 2>/dev/null | tail -c 400000", timeout=90)
-        tail = out.read().decode("utf-8", "replace")
-        cli.close()
+        import subprocess
+        out = subprocess.run([_ZSTD_EXE, "-dc", path], capture_output=True, timeout=30)
+        if out.returncode != 0:
+            log("zstd 解压失败 rc=%d: %s" % (out.returncode, out.stderr[:200]))
+            return 0
+        tail = out.stdout.decode("utf-8", "replace")[-400000:]
         n = _dsh_pending_parse(tail)
         _PI_CACHE.update(key=key, ts=now, pending=n)
         log("DSH 待审批检测 -> %d" % n)
         return n
     except Exception as e:
-        log("DSH 借道解压失败: %s" % e)
+        log("DSH 本地解压失败: %s" % e)
         return 0
 
 
@@ -556,9 +549,22 @@ def do_approve(probe=False):
 
 # ---------------------------------------------------------------- HTTP ----
 SYS = SystemStats()
-STATUS_CACHE = {"data": None, "ts": 0.0}
-CACHE_LOCK = threading.Lock()
-CACHE_TTL = 1.5
+
+# 后台线程持续刷新状态，/status 永远秒回（避免 DSH 待审批检测的慢路径阻塞请求）
+LIVE = {"data": None, "lock": threading.Lock()}
+
+
+def _status_worker():
+    while True:
+        try:
+            data = build_status()
+        except Exception as e:
+            log("状态刷新失败: %s" % e)
+            time.sleep(2)
+            continue
+        with LIVE["lock"]:
+            LIVE["data"] = data
+        time.sleep(2.0)
 
 
 def build_status():
@@ -571,6 +577,9 @@ def build_status():
         "system": SYS.snapshot(),
         "bridge": {"name": APP_NAME, "time": time.strftime("%Y-%m-%d %H:%M:%S")},
     }
+
+
+threading.Thread(target=_status_worker, daemon=True).start()
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -608,13 +617,10 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/status":
             if not self._authed():
                 return
-            with CACHE_LOCK:
-                if STATUS_CACHE["data"] and time.time() - STATUS_CACHE["ts"] < CACHE_TTL:
-                    data = STATUS_CACHE["data"]
-                else:
-                    data = build_status()
-                    STATUS_CACHE["data"] = data
-                    STATUS_CACHE["ts"] = time.time()
+            with LIVE["lock"]:
+                data = LIVE["data"]
+            if data is None:
+                data = build_status()   # 后台线程尚未产出时现算一次
             self._json(data)
             return
         self._json({"ok": False, "error": "not found"}, 404)
