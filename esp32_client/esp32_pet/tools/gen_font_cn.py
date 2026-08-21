@@ -9,7 +9,7 @@ import string
 
 from PIL import Image, ImageDraw, ImageFont
 
-CELL_W, CELL_H = 16, 24        # 240x240 屏放大版（原来 12x16）
+CELL_W, CELL_H = 24, 24        # 240x240 屏（汉字 22px 需 24 宽格子，否则被裁）
 FONT_CANDIDATES = [
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "NotoSansCJK-Regular.ttc"),  # 含拉丁+数字+CJK，OFL
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "DroidSansFallbackFull.ttf"),  # 兜底
@@ -38,7 +38,8 @@ def collect_chars():
 
 
 def render(ch, font):
-    """渲染字形，返回 (实际宽度, 位图数据)。宽度按字形 bbox 裁剪（数字窄、汉字宽）。"""
+    """渲染字形，返回 (实际宽度, 位图数据)。宽度按字形 bbox 裁剪（数字窄、汉字宽）。
+    每行 3 字节（24 位），大端。"""
     img = Image.new("L", (CELL_W, CELL_H), 0)
     d = ImageDraw.Draw(img)
     d.text((0, 0), ch, font=font, fill=255)
@@ -54,9 +55,9 @@ def render(ch, font):
         row = 0
         for x in range(img.size[0]):
             if img.getpixel((x, y)) > 127:
-                row |= (0x8000 >> x)
+                row |= (0x800000 >> x)
         rows.append(row)
-    return w, bytes(b for r in rows for b in (r >> 8, r & 0xFF))
+    return w, bytes(b for r in rows for b in (r >> 16, r >> 8, r & 0xFF))
 
 
 def load_cjk_font(path, size):

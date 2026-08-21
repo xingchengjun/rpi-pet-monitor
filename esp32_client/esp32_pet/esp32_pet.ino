@@ -86,10 +86,13 @@ void drawStr(int x, int y, const char* s, uint16_t color) {
         const glyph_t* g = findGlyph(ch);
         if (g) {
             for (int row = 0; row < g->h; row++) {
-                uint16_t bits = (g->data[row * 2] << 8) | g->data[row * 2 + 1];
+                // 每行 3 字节（24 位），大端
+                uint32_t bits = ((uint32_t)g->data[row * 3] << 16)
+                              | ((uint32_t)g->data[row * 3 + 1] << 8)
+                              | (uint32_t)g->data[row * 3 + 2];
                 int run = 0;
                 for (int col = 0; col <= g->w; col++) {
-                    bool on = (col < g->w) && (bits & (0x8000 >> col));
+                    bool on = (col < g->w) && (bits & (0x800000 >> col));
                     if (on) run++;
                     else if (run) { tft.fillRect(cx + col - run, y + row, run, 1, color); run = 0; }
                 }
