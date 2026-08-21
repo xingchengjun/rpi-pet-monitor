@@ -284,8 +284,8 @@ def dsh_status(now):
 
 # ---- DSH 待审批检测（本机无 zstd，借道树莓派 zstd CLI 解压尾部）----
 _PI_CACHE = {"key": None, "ts": 0.0, "pending": 0}
-_PI_QUIET_S = 3.0          # 文件停写 N 秒才判定可能待审批
-_PI_MIN_INTERVAL = 6.0     # 两次解压最小间隔
+_PI_QUIET_S = 1.0          # 文件停写 N 秒才判定可能待审批（调快，防错过快速审批）
+_PI_MIN_INTERVAL = 2.0     # 两次解压最小间隔
 _ZSTD_EXE = "C:/msys64/ucrt64/bin/zstd.exe"   # 本机 MSYS2 自带 zstd，无需树莓派
 
 
@@ -294,7 +294,7 @@ def _dsh_pending_local(path, mtime, size):
     key = (path, round(mtime, 1), size)
     if _PI_CACHE["key"] == key and now - _PI_CACHE["ts"] < 20:
         return _PI_CACHE["pending"]
-    if now - mtime < _PI_QUIET_S or now - _PI_CACHE["ts"] < _PI_MIN_INTERVAL:
+    if now - _PI_CACHE["ts"] < _PI_MIN_INTERVAL:   # 只控制解压频率（不再要求静默）
         return _PI_CACHE["pending"]
     try:
         import subprocess
