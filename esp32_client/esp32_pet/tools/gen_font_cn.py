@@ -9,7 +9,7 @@ import string
 
 from PIL import Image, ImageDraw, ImageFont
 
-CELL_W, CELL_H = 24, 24        # 240x240 屏（汉字 22px 需 24 宽格子，否则被裁）
+CELL_W, CELL_H = 28, 28        # 汉字22px高约21px，需28格子完整容纳+垂直居中
 FONT_CANDIDATES = [
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "NotoSansCJK-Regular.ttc"),  # 含拉丁+数字+CJK，OFL
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "DroidSansFallbackFull.ttf"),  # 兜底
@@ -38,27 +38,31 @@ def collect_chars():
 
 
 def render(ch, font):
-    """渲染字形，返回 (实际宽度, 位图数据)。宽度按字形 bbox 裁剪（数字窄、汉字宽）。
-    每行 3 字节（24 位），大端。"""
+    """渲染字形，返回 (实际宽度, 位图数据)。
+    裁到 bbox 本身（避免右侧裁切）；垂直居中；每行 4 字节（32 位）大端。"""
     img = Image.new("L", (CELL_W, CELL_H), 0)
     d = ImageDraw.Draw(img)
     d.text((0, 0), ch, font=font, fill=255)
     bbox = img.getbbox()
-    w = CELL_W
+    w = 1
+    glyph = None
     if bbox:
         w = max(1, min(CELL_W, bbox[2] - bbox[0]))
-        # 关键：裁切到 bbox 本身（从 bbox[0] 列起），否则右侧墨迹被切
-        img = img.crop((bbox[0], 0, bbox[2], CELL_H))
-    else:
-        img = img.crop((0, 0, 1, CELL_H))          # 空格等空字形，宽 1
+        g = img.crop((bbox[0], bbox[1], bbox[2], bbox[3]))   # 紧致字形
+        gw, gh = g.size
+        # 垂直居中到 CELL_H
+        canvas = Image.new("L", (gw, CELL_H), 0)
+        oy = max(0, (CELL_H - gh) // 2)
+        canvas.paste(g, (0, oy))
+        glyph = canvas
     rows = []
     for y in range(CELL_H):
         row = 0
-        for x in range(img.size[0]):
-            if img.getpixel((x, y)) > 127:
-                row |= (0x800000 >> x)
+        for x in range(w):
+            if glyph and glyph.getpixel((x, y)) > 127:
+                row |= (0x80000000 >> x)
         rows.append(row)
-    return w, bytes(b for r in rows for b in (r >> 16, (r >> 8) & 0xFF, r & 0xFF))
+    return w, bytes(b for r in rows for b in (r >> 24, (r >> 16) & 0xFF, (r >> 8) & 0xFF, r & 0xFF))
 
 
 def load_cjk_font(path, size):
