@@ -59,11 +59,25 @@ def render(ch, font):
     return w, bytes(b for r in rows for b in (r >> 8, r & 0xFF))
 
 
+def load_cjk_font(path, size):
+    """优先加载 ttc 里的简体中文(SC)面，避免日式字形。"""
+    for idx in range(8):
+        try:
+            f = ImageFont.truetype(path, size, index=idx)
+            name = f.getname()[0]
+            if "SC" in name.upper():
+                print("用 SC 面:", name)
+                return f
+        except Exception:
+            break
+    return ImageFont.truetype(path, size)
+
+
 def main():
     font = None
     for p in FONT_CANDIDATES:
         try:
-            font = ImageFont.truetype(p, 22)   # 22px 渲染进 16x24 格
+            font = load_cjk_font(p, 22)   # 22px 渲染进 16x24 格
             print("字体:", p)
             break
         except Exception:
